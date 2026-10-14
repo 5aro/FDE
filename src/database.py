@@ -46,3 +46,38 @@ def save_companies(companies):
                 )
 
     print(f"총 {len(companies)}개 기업 DB 저장 완료")
+
+
+def save_company_list(companies):
+    if not companies:
+        print("저장할 기업 목록이 없습니다.")
+        return
+
+    sql = """
+        INSERT INTO companies (
+            corp_code,
+            corp_name,
+            stock_code
+        )
+        VALUES (
+            %(corp_code)s,
+            %(corp_name)s,
+            %(stock_code)s
+        )
+        ON CONFLICT (corp_code)
+        DO UPDATE SET
+            corp_name = EXCLUDED.corp_name,
+            stock_code = EXCLUDED.stock_code
+    """
+
+    with psycopg.connect(
+        dbname=os.getenv("DB_NAME", "fde"),
+        user=os.getenv("DB_USER"),
+        host=os.getenv("DB_HOST", "localhost"),
+        port=os.getenv("DB_PORT", "5432"),
+    ) as conn:
+
+        with conn.cursor() as cur:
+            cur.executemany(sql, companies)
+
+    print(f"기업 목록 {len(companies)}건 DB 적재 완료")
