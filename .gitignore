@@ -3,3 +3,7 @@
 logs/
 __pycache__/
 .pytest_cache/
+
+# Airflow configuration
+airflow.cfg
+**/airflow.cfg
