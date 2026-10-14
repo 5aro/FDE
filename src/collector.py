@@ -3,6 +3,17 @@ import csv
 import requests
 from dotenv import load_dotenv
 
+from validator import validate_company
+from database import save_companies
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+)
+
+logger = logging.getLogger(__name__)
+
 load_dotenv()
 
 API_KEY = os.getenv("DART_API_KEY")
@@ -65,13 +76,24 @@ corp_codes = ["00126380", "00164779"]
 
 companies = []
 
+logger.info("기업정보 수집 시작")
+
 for corp_code in corp_codes:
 
     company = get_company(corp_code)
 
-    if company is not None:
-        companies.append(company)
+    if company is None:
+        logger.warning(f"기업정보 수집 실패: {corp_code}")
+        continue
 
-print(companies)
+    if not validate_company(company):
+        logger.warning(f"기업정보 검증 실패: {corp_code}")
+        continue
 
-save_to_csv(companies)
+    companies.append(company)
+
+    logger.info(f"기업정보 수집 성공: {company['corp_name']}")
+
+save_companies(companies)
+
+logger.info(f"기업정보 수집 종료: {len(companies)}개")
