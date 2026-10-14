@@ -51,7 +51,7 @@ def save_companies(companies):
 def save_company_list(companies):
     if not companies:
         print("저장할 기업 목록이 없습니다.")
-        return
+        return 0
 
     sql = """
         INSERT INTO companies (
@@ -68,6 +68,9 @@ def save_company_list(companies):
         DO UPDATE SET
             corp_name = EXCLUDED.corp_name,
             stock_code = EXCLUDED.stock_code
+        WHERE
+            companies.corp_name IS DISTINCT FROM EXCLUDED.corp_name
+            OR companies.stock_code IS DISTINCT FROM EXCLUDED.stock_code
     """
 
     with psycopg.connect(
@@ -75,12 +78,15 @@ def save_company_list(companies):
         user=os.getenv("DB_USER"),
         host=os.getenv("DB_HOST", "localhost"),
         port=os.getenv("DB_PORT", "5432"),
+        password=os.getenv("DB_PASSWORD"),
     ) as conn:
 
         with conn.cursor() as cur:
             cur.executemany(sql, companies)
 
-    print(f"기업 목록 {len(companies)}건 DB 적재 완료")
+    print(f"기업 목록 {len(companies)}건 처리 완료")
+
+    return len(companies)
 
 
 def start_pipeline_run(pipeline_name):
