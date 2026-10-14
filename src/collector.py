@@ -2,7 +2,6 @@ import os
 import csv
 import requests
 from dotenv import load_dotenv
-
 from validator import validate_company
 from database import save_companies
 import logging

@@ -5,7 +5,11 @@ import logging
 import requests
 import xml.etree.ElementTree as ET
 from dotenv import load_dotenv
-from database import save_company_list
+from database import (
+    save_company_list,
+    start_pipeline_run,
+    finish_pipeline_run,
+)
 
 load_dotenv()
 
@@ -62,11 +66,38 @@ def get_listed_companies():
     return companies
 
 
+def main():
+    run_id = start_pipeline_run("corp_list")
+
+    try:
+        companies = get_listed_companies()
+
+        save_company_list(companies)
+
+        finish_pipeline_run(
+            run_id=run_id,
+            status="SUCCESS",
+            records_processed=len(companies),
+        )
+
+        logger.info(
+            "파이프라인 실행 성공: run_id=%s, records=%s",
+            run_id,
+            len(companies),
+        )
+
+    except Exception as e:
+        logger.exception("파이프라인 실행 실패")
+
+        finish_pipeline_run(
+            run_id=run_id,
+            status="FAILED",
+            error_message=str(e),
+        )
+
+        raise
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-
-    companies = get_listed_companies()
-
-    print(f"수집된 기업 수: {len(companies)}")
-
-    save_company_list(companies)
+    main()
