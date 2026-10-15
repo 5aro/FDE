@@ -20,7 +20,12 @@ def test_pipeline_success(monkeypatch):
 
     mock_start = Mock(return_value=1)
     mock_collect = Mock(return_value=companies)
-    mock_save = Mock()
+    mock_save = Mock(return_value={
+        "processed": 1,
+        "inserted": 1,
+        "updated": 0,
+        "unchanged": 0,
+    })
     mock_finish = Mock()
 
     monkeypatch.setattr(corp_list, "start_pipeline_run", mock_start)
@@ -36,6 +41,9 @@ def test_pipeline_success(monkeypatch):
         run_id=1,
         status="SUCCESS",
         records_processed=1,
+        records_inserted=1,
+        records_updated=0,
+        records_unchanged=0,
     )
 
 

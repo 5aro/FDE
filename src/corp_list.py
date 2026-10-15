@@ -72,29 +72,35 @@ def main():
     try:
         companies = get_listed_companies()
 
-        save_company_list(companies)
+        # 증분 적재 실행 및 결과 수집
+        metrics = save_company_list(companies)
 
+        # 실행 이력 저장
         finish_pipeline_run(
             run_id=run_id,
             status="SUCCESS",
-            records_processed=len(companies),
+            records_processed=metrics["processed"],
+            records_inserted=metrics["inserted"],
+            records_updated=metrics["updated"],
+            records_unchanged=metrics["unchanged"],
         )
 
         logger.info(
-            "파이프라인 실행 성공: run_id=%s, records=%s",
-            run_id,
-            len(companies),
+            "증분 적재 완료 | 전체: %s | 신규: %s | 변경: %s | 동일: %s",
+            metrics["processed"],
+            metrics["inserted"],
+            metrics["updated"],
+            metrics["unchanged"],
         )
 
     except Exception as e:
-        logger.exception("파이프라인 실행 실패")
+        logger.exception("기업 목록 수집 실패")
 
         finish_pipeline_run(
             run_id=run_id,
             status="FAILED",
             error_message=str(e),
         )
-
         raise
 
 
