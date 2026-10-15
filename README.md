@@ -306,3 +306,68 @@ v1의 범위는 로컬 환경에서의 수집·적재·분석·시각화입니�
 5. **포트폴리오 증빙 마무리:** 대시보드와 Airflow 성공 화면을 추가하고 개발 기록을 현재 태스크 4개 구성에 맞춰 갱신합니다.
 
 대규모 분산 처리나 클라우드 운영은 이번 v1 범위에 포함하지 않습니다.
+
+# Development Roadmap
+
+FDE는 금융 데이터 수집 및 분석 파이프라인을 기반으로,
+데이터 엔지니어링과 AI 엔지니어링 기술을 단계적으로 확장하는 프로젝트입니다.
+
+| Version | Goal | Tech Stack | Status |
+|---------|------|------------|--------|
+| **v1.0** | Financial Data ETL Pipeline | Python, PostgreSQL, Airflow, Docker, Streamlit | ✅ Completed |
+| **v1.1** | Data Quality & Incremental ETL | pytest, SQL, Transaction | Planned |
+| **v1.2** | Data Modeling & Transformation | dbt, PostgreSQL | Planned |
+| **v1.3** | CI Automation & Code Quality | GitHub Actions, pytest, Ruff | Planned |
+| **v1.4** | Data Lake & Raw Data Storage | MinIO, Parquet, S3 API | Planned |
+| **v1.5** | Financial Disclosure RAG | LangChain, pgvector, Embedding | Planned |
+| **v1.6** | Natural Language SQL Analytics | LLM, Text-to-SQL | Planned |
+| **v1.7** | Financial AI Agent | LangGraph, Tool Calling | Planned |
+| **v2.0** | Cloud Data & AI Platform | AWS S3, RDS, ECS, IAM | Planned |
+
+## Milestones
+
+- [x] **v1.0 — ETL Pipeline**
+  - OpenDART API 기반 기업정보 및 재무제표 수집
+  - PostgreSQL UPSERT 및 기본 증분 수집
+  - Airflow DAG 자동화
+  - SQL 재무지표 분석 및 Streamlit 대시보드
+
+- [ ] **v1.1 — Data Reliability**
+  - 수집 상태 관리 및 실패 데이터 재처리
+  - 트랜잭션 기반 데이터 정합성 확보
+  - 데이터 품질 검증 강화
+
+- [ ] **v1.2 — Data Modeling**
+  - dbt 기반 Staging / Mart 모델 구축
+  - SQL 변환 로직 모듈화
+  - dbt 데이터 테스트 적용
+
+- [ ] **v1.3 — CI Automation**
+  - GitHub Actions 기반 자동 테스트
+  - Ruff 기반 코드 품질 검사
+
+- [ ] **v1.4 — Data Lake**
+  - MinIO 기반 원본 데이터 저장
+  - Parquet 데이터 변환 및 저장
+  - 원본 데이터 재처리 구조 구현
+
+- [ ] **v1.5 — RAG**
+  - OpenDART 사업보고서 텍스트 수집
+  - 문서 청킹 및 임베딩
+  - pgvector 기반 유사도 검색
+  - 출처 기반 LLM 답변 생성
+
+- [ ] **v1.6 — Text-to-SQL**
+  - 자연어 질문을 SQL로 변환
+  - 읽기 전용 SQL 실행 및 검증
+  - 재무 분석 결과 반환
+
+- [ ] **v1.7 — AI Agent**
+  - LangGraph 기반 Agent 구성
+  - SQL Tool 및 RAG Tool 연동
+  - 정형·비정형 데이터 통합 분석
+
+- [ ] **v2.0 — Cloud Platform**
+  - AWS 기반 데이터 저장 및 처리 환경 구축
+  - 데이터 파이프라인 및 AI 서비스 배포
+  - 운영 모니터링 및 자동화
