@@ -132,40 +132,25 @@ def fde_pipeline():
         retry_delay=timedelta(minutes=5),
     )
     def collect_financial_statements():
-
+        import os
         import sys
+
+        # Airflow 컨테이너에서 Mac PostgreSQL로 접속
+        os.environ["DB_HOST"] = os.environ["FDE_DB_HOST"]
+        os.environ["DB_PORT"] = os.environ["FDE_DB_PORT"]
+        os.environ["DB_NAME"] = os.environ["FDE_DB_NAME"]
+        os.environ["DB_USER"] = os.environ["FDE_DB_USER"]
+        os.environ["DB_PASSWORD"] = os.environ["FDE_DB_PASSWORD"]
 
         sys.path.insert(0, "/opt/airflow/src")
 
         from financial_collector import (
-            fetch_financial_statements,
-            save_financial_statements,
+            collect_target_companies_financials,
         )
 
-        print("삼성전자 재무제표 수집 시작")
-
-        # OpenDART API 호출
-        result = fetch_financial_statements(
-            corp_code="00126380",
+        collect_target_companies_financials(
             bsns_year=2025,
-            reprt_code="11011",
-            fs_div="CFS",
         )
-
-        accounts = result.get("list", [])
-
-        if not accounts:
-            raise ValueError("수집된 재무제표 데이터가 없습니다.")
-
-        print(f"재무제표 수집 완료: {len(accounts)}건")
-
-        # PostgreSQL 저장
-        save_financial_statements(
-            accounts,
-            fs_div="CFS",
-        )
-
-        print("재무제표 ETL 완료")
 
     # -----------------------------------------
     # TASK 실행 순서

@@ -13,6 +13,7 @@ from decimal import Decimal, InvalidOperation
 
 import psycopg
 import requests
+
 if __package__:
     from .db_config import get_db_config
 else:
@@ -196,6 +197,145 @@ def save_financial_statements(
         f"계정 {len(rows)}개, "
         f"DB={db_name}"
     )
+
+
+def get_target_companies():
+    """
+    PostgreSQL에서 수집 대상 기업 5개의 고유번호를 조회한다.
+
+    종목코드 기준으로 조회하므로
+    기업 고유번호를 코드에 직접 입력할 필요가 없다.
+    """
+    stock_codes = [
+        "005930",  # 삼성전자
+        "000660",  # SK하이닉스
+        "005380",  # 현대자동차
+        "035420",  # NAVER
+        "066570",  # LG전자
+    ]
+
+    with psycopg.connect(
+        dbname=os.getenv("DB_NAME", "fde_test"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        host=os.getenv("DB_HOST", "localhost"),
+        port=os.getenv("DB_PORT", "5432"),
+    ) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT corp_code, corp_name
+                FROM companies
+                WHERE stock_code = ANY(%s)
+                ORDER BY corp_name
+                """,
+                (stock_codes,),
+            )
+
+            companies = cur.fetchall()
+
+    if len(companies) != 5:
+        raise ValueError(f"수집 대상 기업 수가 올바르지 않습니다: {len(companies)}개")
+
+    return companies
+
+
+def collect_target_companies_financials(
+    bsns_year: int = 2025,
+):
+    """
+    5개 기업의 재무제표를 순차적으로 수집한다.
+
+    1. DB에서 기업 목록 조회
+    2. 기업별 OpenDART API 호출
+    3. PostgreSQL UPSERT
+    4. 수집 결과 출력
+    """
+    companies = get_target_companies()
+
+    success = 0
+    failures = []
+
+    for corp_code, corp_name in companies:
+        try:
+            print(f"[START] {corp_name} ({corp_code})")
+
+            result = fetch_financial_statements(
+                corp_code=corp_code,
+                bsns_year=bsns_year,
+                reprt_code="11011",
+                fs_div="CFS",
+            )
+
+            accounts = result.get("list", [])
+
+            if not accounts:
+                raise ValueError("재무제표 데이터가 없습니다.")
+
+            save_financial_statements(
+                accounts,
+                fs_div="CFS",
+            )
+
+            success += 1
+
+            print(f"[SUCCESS] {corp_name}: {len(accounts)}건")
+
+        except Exception as exc:
+            failures.append((corp_name, str(exc)))
+            print(f"[FAILED] {corp_name}: {exc}")
+
+        for corp_code, corp_name in companies:
+
+            if is_financial_data_collected(
+                corp_code=corp_code,
+                bsns_year=bsns_year,
+                fs_div="CFS",
+            ):
+                print(f"[SKIP] {corp_name}: 이미 수집된 재무제표")
+                continue
+
+    print(f"수집 종료: 성공 {success}개 / " f"실패 {len(failures)}개")
+
+    # 일부 기업이 실패하면 Airflow에서도 실패로 표시
+    # 성공한 기업의 DB 저장 결과는 유지됨
+    if failures:
+        raise RuntimeError(f"재무제표 수집 실패 기업: {failures}")
+
+
+def is_financial_data_collected(
+    corp_code: str,
+    bsns_year: int,
+    fs_div: str = "CFS",
+) -> bool:
+    """
+    특정 기업의 재무제표가 이미 DB에 저장되어 있는지 확인한다.
+
+    True  : 기존 데이터 존재
+    False : 기존 데이터 없음
+    """
+    with psycopg.connect(
+        dbname=os.getenv("DB_NAME", "fde_test"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        host=os.getenv("DB_HOST", "localhost"),
+        port=os.getenv("DB_PORT", "5432"),
+    ) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM financial_statements
+                    WHERE corp_code = %s
+                      AND bsns_year = %s
+                      AND fs_div = %s
+                )
+                """,
+                (corp_code, bsns_year, fs_div),
+            )
+
+            return cur.fetchone()[0]
 
 
 if __name__ == "__main__":
