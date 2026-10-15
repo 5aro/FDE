@@ -1,3 +1,13 @@
+"""
+FDE Airflow ETL Pipeline
+
+실행 순서:
+1. 기업정보 수집
+2. 기업정보 존재 여부 검증
+3. 기업정보 품질 검사
+4. 재무제표 수집 및 PostgreSQL 저장
+"""
+
 from datetime import datetime, timedelta
 
 from airflow.sdk import dag, task
@@ -12,16 +22,11 @@ from airflow.sdk import dag, task
 )
 def fde_pipeline():
 
+    # -----------------------------------------
+    # TASK 1. 기업정보 수집
+    # -----------------------------------------
     @task(retries=2, retry_delay=timedelta(minutes=5))
     def collect_corporations():
-        import os
-
-        # 기존 FDE DB 설정을 컨테이너 전용 설정으로 매핑
-        os.environ["DB_HOST"] = os.environ["FDE_DB_HOST"]
-        os.environ["DB_PORT"] = os.environ["FDE_DB_PORT"]
-        os.environ["DB_NAME"] = os.environ["FDE_DB_NAME"]
-        os.environ["DB_USER"] = os.environ["FDE_DB_USER"]
-        os.environ["DB_PASSWORD"] = os.environ["FDE_DB_PASSWORD"]
 
         import sys
 
@@ -31,20 +36,24 @@ def fde_pipeline():
 
         main()
 
+    # -----------------------------------------
+    # TASK 2. 기업정보 검증
+    # -----------------------------------------
     @task()
     def validate_results():
-        import os
+
+        import sys
         import psycopg
 
-        with psycopg.connect(
-            host=os.environ["FDE_DB_HOST"],
-            port=os.environ["FDE_DB_PORT"],
-            dbname=os.environ["FDE_DB_NAME"],
-            user=os.environ["FDE_DB_USER"],
-            password=os.environ["FDE_DB_PASSWORD"],
-        ) as conn:
+        sys.path.insert(0, "/opt/airflow/src")
+        from db_config import get_db_config
+
+        with psycopg.connect(**get_db_config()) as conn:
+
             with conn.cursor() as cur:
+
                 cur.execute("SELECT COUNT(*) FROM companies")
+
                 count = cur.fetchone()[0]
 
         if count == 0:
@@ -52,23 +61,27 @@ def fde_pipeline():
 
         print(f"기업정보 검증 완료: {count}건")
 
+    # -----------------------------------------
+    # TASK 3. 데이터 품질 검사
+    # -----------------------------------------
     @task()
     def check_data_quality():
-        import os
+
+        import sys
         import psycopg
 
-        with psycopg.connect(
-            host=os.environ["FDE_DB_HOST"],
-            port=os.environ["FDE_DB_PORT"],
-            dbname=os.environ["FDE_DB_NAME"],
-            user=os.environ["FDE_DB_USER"],
-            password=os.environ["FDE_DB_PASSWORD"],
-        ) as conn:
+        sys.path.insert(0, "/opt/airflow/src")
+        from db_config import get_db_config
+
+        with psycopg.connect(**get_db_config()) as conn:
+
             with conn.cursor() as cur:
+
                 cur.execute("""
                     SELECT
                         COUNT(*) AS total_rows,
-                        COUNT(DISTINCT corp_code) AS unique_companies,
+                        COUNT(DISTINCT corp_code)
+                            AS unique_companies,
                         COUNT(*) FILTER (
                             WHERE corp_name IS NULL
                                OR BTRIM(corp_name) = ''
@@ -77,8 +90,8 @@ def fde_pipeline():
                             WHERE stock_code IS NULL
                                OR stock_code !~ '^[0-9A-Z]{6}$'
                         ) AS invalid_stock_codes
-                    FROM companies;
-                """)
+                    FROM companies
+                    """)
 
                 (
                     total_rows,
@@ -111,7 +124,58 @@ def fde_pipeline():
 
         print("데이터 품질 검증 SUCCESS")
 
-    collect_corporations() >> validate_results() >> check_data_quality()
+    # -----------------------------------------
+    # TASK 4. 재무제표 수집
+    # -----------------------------------------
+    @task(
+        retries=2,
+        retry_delay=timedelta(minutes=5),
+    )
+    def collect_financial_statements():
+
+        import sys
+
+        sys.path.insert(0, "/opt/airflow/src")
+
+        from financial_collector import (
+            fetch_financial_statements,
+            save_financial_statements,
+        )
+
+        print("삼성전자 재무제표 수집 시작")
+
+        # OpenDART API 호출
+        result = fetch_financial_statements(
+            corp_code="00126380",
+            bsns_year=2025,
+            reprt_code="11011",
+            fs_div="CFS",
+        )
+
+        accounts = result.get("list", [])
+
+        if not accounts:
+            raise ValueError("수집된 재무제표 데이터가 없습니다.")
+
+        print(f"재무제표 수집 완료: {len(accounts)}건")
+
+        # PostgreSQL 저장
+        save_financial_statements(
+            accounts,
+            fs_div="CFS",
+        )
+
+        print("재무제표 ETL 완료")
+
+    # -----------------------------------------
+    # TASK 실행 순서
+    # -----------------------------------------
+    (
+        collect_corporations()
+        >> validate_results()
+        >> check_data_quality()
+        >> collect_financial_statements()
+    )
 
 
 fde_pipeline()

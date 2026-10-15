@@ -1,8 +1,8 @@
-import os
 import psycopg
-from dotenv import load_dotenv
-
-load_dotenv()
+if __package__:
+    from .db_config import get_db_config
+else:
+    from db_config import get_db_config
 
 
 def save_companies(companies):
@@ -11,12 +11,7 @@ def save_companies(companies):
         print("저장할 기업정보가 없습니다.")
         return
 
-    with psycopg.connect(
-        dbname=os.getenv("DB_NAME", "fde"),
-        user=os.getenv("DB_USER"),
-        host=os.getenv("DB_HOST", "localhost"),
-        port=os.getenv("DB_PORT", "5432"),
-    ) as conn:
+    with psycopg.connect(**get_db_config()) as conn:
         with conn.cursor() as cur:
             for company in companies:
                 cur.execute(
@@ -86,13 +81,7 @@ def save_company_list(companies):
             OR companies.stock_code IS DISTINCT FROM EXCLUDED.stock_code
     """
 
-    with psycopg.connect(
-        dbname=os.getenv("DB_NAME", "fde"),
-        user=os.getenv("DB_USER"),
-        host=os.getenv("DB_HOST", "localhost"),
-        port=os.getenv("DB_PORT", "5432"),
-        password=os.getenv("DB_PASSWORD"),
-    ) as conn:
+    with psycopg.connect(**get_db_config()) as conn:
 
         with conn.cursor() as cur:
             corp_codes = [company["corp_code"] for company in companies]
@@ -144,12 +133,7 @@ def start_pipeline_run(pipeline_name):
         RETURNING run_id
     """
 
-    with psycopg.connect(
-        dbname=os.getenv("DB_NAME", "fde"),
-        user=os.getenv("DB_USER"),
-        host=os.getenv("DB_HOST", "localhost"),
-        port=os.getenv("DB_PORT", "5432"),
-    ) as conn:
+    with psycopg.connect(**get_db_config()) as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (pipeline_name,))
             run_id = cur.fetchone()[0]
@@ -179,13 +163,7 @@ def finish_pipeline_run(
         WHERE run_id = %s
     """
 
-    with psycopg.connect(
-        dbname=os.getenv("DB_NAME", "fde"),
-        user=os.getenv("DB_USER"),
-        host=os.getenv("DB_HOST", "localhost"),
-        port=os.getenv("DB_PORT", "5432"),
-        password=os.getenv("DB_PASSWORD"),
-    ) as conn:
+    with psycopg.connect(**get_db_config()) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 sql,

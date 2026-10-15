@@ -2,77 +2,111 @@
 FDE 데이터베이스 마이그레이션 실행기
 
 기능:
-1. schema_migrations 테이블 생성
-2. 적용된 마이그레이션 조회
+1. 마이그레이션 이력 테이블 생성
+2. 기존 마이그레이션 적용 여부 확인
 3. 미적용 SQL 파일 실행
-4. 실행 결과 기록
-
-실행:
-    python scripts/migrate.py
+4. 마이그레이션별 트랜잭션 처리
+5. 테스트 DB / 실제 DB 실행 환경 구분
 """
 
 import os
+import sys
 from pathlib import Path
 
 import psycopg
-from dotenv import load_dotenv
 
-# 프로젝트 루트 경로
+# 프로젝트 루트
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SQL 파일 경로
 MIGRATIONS_DIR = BASE_DIR / "sql" / "migrations"
 BOOTSTRAP_FILE = BASE_DIR / "sql" / "bootstrap" / "create_schema_migrations.sql"
 
-# .env 파일 로드
-load_dotenv(BASE_DIR / ".env")
+sys.path.insert(0, str(BASE_DIR / "src"))
+from db_config import get_db_config
 
 
 def run_migrations():
-    """미적용 SQL 마이그레이션을 실행한다."""
 
-    # 안전을 위해 기본 실행 대상은 테스트 DB로 설정
-    db_name = os.getenv("MIGRATION_DB_NAME", "fde_test")
+    # Shared target; production migration still requires explicit opt-in.
+    db_config = get_db_config()
+    db_name = os.getenv("MIGRATION_DB_NAME", db_config["dbname"])
+    db_config["dbname"] = db_name
 
-    # 운영 DB에 실수로 적용하는 것을 방지
-    if db_name != "fde_test":
-        raise ValueError("현재는 fde_test 데이터베이스에서만 실행할 수 있습니다.")
+    # 허용된 데이터베이스
+    allowed_databases = {"fde_test", "fde"}
 
-    # 마이그레이션 파일 검색
+    if db_name not in allowed_databases:
+        raise ValueError(f"허용되지 않은 데이터베이스: {db_name}")
+
+    # 실제 DB 실행 시 명시적인 승인 필요
+    if db_name == "fde":
+        if os.getenv("ALLOW_PRODUCTION_MIGRATION") != "true":
+            raise RuntimeError("fde 마이그레이션은 명시적인 승인이 필요합니다.")
+
     migration_files = sorted(MIGRATIONS_DIR.glob("[0-9]*_*.sql"))
 
     if not migration_files:
         raise FileNotFoundError("마이그레이션 SQL 파일이 없습니다.")
 
-    with psycopg.connect(
-        dbname=db_name,
-        user=os.getenv("DB_USER"),
-        host=os.getenv("DB_HOST", "localhost"),
-        port=os.getenv("DB_PORT", "5432"),
-        password=os.getenv("DB_PASSWORD"),
-    ) as conn:
+    print(f"\n마이그레이션 대상 DB: {db_name}\n")
 
-        # 실제 접속한 데이터베이스 검증
+    # autocommit=True:
+    # 각 마이그레이션을 독립적인 트랜잭션으로 실행하기 위함
+    with psycopg.connect(**db_config, autocommit=True) as conn:
+
+        # 실제 연결 DB 확인
         with conn.cursor() as cur:
             cur.execute("SELECT current_database()")
             actual_db = cur.fetchone()[0]
 
-            if actual_db != "fde_test":
-                raise RuntimeError("테스트 DB가 아닌 곳에 연결되었습니다.")
+        if actual_db != db_name:
+            raise RuntimeError(f"DB 연결 불일치: " f"예상={db_name}, 실제={actual_db}")
 
-        # 마이그레이션 이력 테이블 생성
-        with conn.cursor() as cur:
-            bootstrap_sql = BOOTSTRAP_FILE.read_text(encoding="utf-8")
-            cur.execute(bootstrap_sql)
+        # 실제 DB의 기존 스키마를 먼저 베이스라인으로
+        # 등록해야 하므로, 미등록 상태에서는 실행 차단
+        if db_name == "fde":
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM information_schema.tables
+                        WHERE table_schema = 'public'
+                          AND table_name = 'schema_migrations'
+                    )
+                    """)
+                history_table_exists = cur.fetchone()[0]
 
-        # 적용된 마이그레이션 조회
+            if not history_table_exists:
+                raise RuntimeError(
+                    "fde에 마이그레이션 이력이 없습니다. "
+                    "기존 스키마 검증 및 베이스라인 등록이 "
+                    "먼저 필요합니다."
+                )
+
+        # 이력 테이블 생성
+        bootstrap_sql = BOOTSTRAP_FILE.read_text(encoding="utf-8")
+
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute(bootstrap_sql)
+
+        # 적용된 버전 조회
         with conn.cursor() as cur:
-            cur.execute("SELECT version FROM schema_migrations")
+            cur.execute("SELECT version FROM public.schema_migrations")
 
             applied_versions = {row[0] for row in cur.fetchall()}
 
-        # SQL 파일을 순서대로 실행
+        # 실제 DB에서는 기존 001~003의 베이스라인을 확인
+        if db_name == "fde":
+            required_baseline = {"001", "002", "003"}
+
+            if not required_baseline.issubset(applied_versions):
+                raise RuntimeError("fde의 001~003 베이스라인이 " "완료되지 않았습니다.")
+
+        # 마이그레이션 순차 실행
         for file in migration_files:
+
             version, description = file.stem.split("_", 1)
 
             if version in applied_versions:
@@ -83,15 +117,15 @@ def run_migrations():
 
             sql = file.read_text(encoding="utf-8")
 
-            # SQL 실행 + 이력 기록
-            # 하나라도 실패하면 해당 트랜잭션이 롤백된다.
+            # SQL 실행 + 이력 저장을 하나의 트랜잭션으로 처리
             with conn.transaction():
                 with conn.cursor() as cur:
+
                     cur.execute(sql)
 
                     cur.execute(
                         """
-                        INSERT INTO schema_migrations (
+                        INSERT INTO public.schema_migrations (
                             version,
                             description
                         )
@@ -99,6 +133,8 @@ def run_migrations():
                         """,
                         (version, description),
                     )
+
+            applied_versions.add(version)
 
             print(f"[DONE] {file.name}")
 
