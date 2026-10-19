@@ -284,37 +284,106 @@ DB_NAME=fde_test python -m pytest tests/ -v
 
 ---
 
-## v1.2 — Data Modeling & Transformation (Planned)
+---
 
-### 개발 목표
+## v1.2 — Data Modeling & Transformation
 
-dbt를 활용하여 원천 재무제표 데이터를 분석 목적에 맞게 변환하고 관리한다.
+### 1. 개발 목표
 
-### 주요 개발 계획
+기존 PostgreSQL 원본 데이터를 dbt로 변환하여 분석용 데이터 모델을 구축한다.
 
-**dbt 환경 구축**
-- dbt-core 및 PostgreSQL Adapter 설치
-- FDE PostgreSQL 연결
-- dbt 프로젝트 초기화
+- Source / Staging / Mart 계층 분리
+- 재무지표 계산 로직 모듈화
+- 데이터 품질 테스트 자동화
+
+### 2. 개발 환경
+
+- dbt Core 1.12.6 / dbt-postgres 1.11.0
+- Python 3.12 / PostgreSQL 17
+- 원본 스키마: `public`
+- 분석 스키마: `fde_dev`
+
+### 3. 구현 내용
 
 **Staging 모델**
-- 기업정보 Staging 모델
-- 재무제표 Staging 모델
-- 컬럼 및 데이터 타입 표준화
+- `stg_companies`: 기업정보 VIEW
+- `stg_financial_statements`: 재무제표 VIEW
 
-**Mart 모델**
-- 기업별 재무지표 모델
-- 매출액 및 영업이익 분석 모델
-- 재무비율 계산 모델
+**Financial Mart**
+- `mart_financial_summary`: 분석용 TABLE
+- 기업별 매출액, 영업이익, 당기순이익 계산
+- 영업이익률 및 순이익률 계산
+- `ROW_NUMBER()`를 활용한 IS/CIS 중복 계정 처리
+- 기업·사업연도·보고서·연결/별도 구분별 집계
 
 **데이터 품질 테스트**
-- not_null
-- unique
-- relationships
-- accepted_values
+- Source NULL·고유성·참조 무결성 검사 6개
+- Mart NULL 검사 7개
+- Mart 복합키 중복 검사 1개
+- 총 14개 테스트 구현
 
-**기대 결과**
-- SQL 변환 로직 모듈화
-- 분석용 데이터 모델 재사용
+### 4. 트러블슈팅
+
+**패키지 의존성 충돌**
+- `protobuf`, OpenTelemetry, `grpcio` 충돌 해결
+- 불필요한 `dbt-state` 플러그인 제거
+- `pip check` 정상 통과
+
+**dbt 테스트 실패**
+- 초기 프로젝트의 예제 모델에서 NULL 테스트 실패
+- 불필요한 예제 모델 및 설정 제거
+- `dbt build` 재실행 후 전체 통과
+
+**재무제표 계정 중복**
+- IS/CIS에 동일 계정 ID가 존재하는 문제
+- `ROW_NUMBER()`와 IS 우선순위로 중복 처리
+
+### 5. 테스트 결과
+
+**dbt 전체 빌드**
+
+```bash
+cd fde_dbt
+dbt build
+```
+
+```text
+3 models
+14 tests
+
+PASS=17 WARN=0 ERROR=0 SKIP=0
+```
+
+**Python 회귀 테스트**
+
+```bash
+DB_NAME=fde_test python -m pytest tests/ -v
+```
+
+```text
+15 passed
+```
+
+| 구분 | 결과 |
+|---|---|
+| dbt 모델 | 3개 생성 성공 |
+| dbt 테스트 | 14개 통과 |
+| Python 테스트 | 15개 통과 |
+| **전체 자동화 테스트** | **29개 통과** |
+
+### 6. 개발 결과 및 향후 개선
+
+**완료**
+- dbt 기반 Staging / Mart 구축
+- 재무지표 계산 및 중복 계정 처리
 - 데이터 품질 검증 자동화
-- Streamlit 대시보드와 dbt Mart 연계 기반 마련
+- 기존 Python ETL 회귀 테스트 통과
+
+**향후 개선**
+- Airflow DAG와 dbt 실행 통합
+- Streamlit 대시보드의 Mart 직접 조회
+- 정정공시 처리 및 데이터 검증 강화
+
+**다음 단계: v1.3 — CI Automation & Code Quality**
+- GitHub Actions 기반 자동 테스트
+- Ruff 기반 코드 품질 검사
