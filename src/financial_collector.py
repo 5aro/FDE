@@ -216,13 +216,7 @@ def get_target_companies():
         "066570",  # LG전자
     ]
 
-    with psycopg.connect(
-        dbname=os.getenv("DB_NAME", "fde_test"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-        host=os.getenv("DB_HOST", "localhost"),
-        port=os.getenv("DB_PORT", "5432"),
-    ) as conn:
+    with psycopg.connect(**get_db_config()) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """

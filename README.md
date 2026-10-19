@@ -332,7 +332,7 @@ FDE는 금융 데이터 수집 및 분석 파이프라인을 기반으로,
   - Airflow DAG 자동화
   - SQL 재무지표 분석 및 Streamlit 대시보드
 
-- [ ] **v1.1 — Data Reliability**
+- [x] **v1.1 — Data Reliability**
   - 수집 상태 관리 및 실패 데이터 재처리
   - 트랜잭션 기반 데이터 정합성 확보
   - 데이터 품질 검증 강화
