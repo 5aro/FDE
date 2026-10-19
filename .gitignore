@@ -7,3 +7,5 @@ __pycache__/
 # Airflow configuration
 airflow.cfg
 **/airflow.cfg
+
+.DS_Store
