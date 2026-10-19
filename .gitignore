@@ -9,3 +9,11 @@ airflow.cfg
 **/airflow.cfg
 
 .DS_Store
+
+# dbt generated files
+fde_dbt/target/
+fde_dbt/logs/
+fde_dbt/dbt_packages/
+
+# Local dbt configuration
+fde_dbt/profiles.yml

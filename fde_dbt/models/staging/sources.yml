@@ -1,0 +1,32 @@
+version: 2
+
+sources:
+  - name: fde
+    description: "OpenDART ETL 원본 데이터"
+    database: fde
+    schema: public
+
+    tables:
+      - name: companies
+        description: "상장기업 기본정보"
+        columns:
+          - name: corp_code
+            data_tests:
+              - not_null
+              - unique
+
+      - name: financial_statements
+        description: "기업별 재무제표 원본 데이터"
+        columns:
+          - name: id
+            data_tests:
+              - not_null
+              - unique
+
+          - name: corp_code
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('fde', 'companies')
+                    field: corp_code

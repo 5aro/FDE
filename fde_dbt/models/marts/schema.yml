@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: mart_financial_summary
+    description: "기업별 연간 재무지표 분석 테이블"
+
+    columns:
+      - name: corp_code
+        description: "OpenDART 기업 고유번호"
+        data_tests:
+          - not_null
+
+      - name: bsns_year
+        description: "사업연도"
+        data_tests:
+          - not_null
+
+      - name: reprt_code
+        description: "보고서 코드"
+        data_tests:
+          - not_null
+
+      - name: fs_div
+        description: "연결/별도 재무제표 구분"
+        data_tests:
+          - not_null
+
+      - name: revenue
+        description: "매출액"
+        data_tests:
+          - not_null
+
+      - name: operating_income
+        description: "영업이익"
+        data_tests:
+          - not_null
+
+      - name: net_income
+        description: "당기순이익"
+        data_tests:
+          - not_null
