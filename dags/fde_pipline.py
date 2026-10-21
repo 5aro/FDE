@@ -43,18 +43,17 @@ def fde_pipeline():
     def validate_results():
 
         import sys
+
         import psycopg
 
         sys.path.insert(0, "/opt/airflow/src")
         from db_config import get_db_config
 
-        with psycopg.connect(**get_db_config()) as conn:
+        with psycopg.connect(**get_db_config()) as conn, conn.cursor() as cur:
 
-            with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM companies")
 
-                cur.execute("SELECT COUNT(*) FROM companies")
-
-                count = cur.fetchone()[0]
+            count = cur.fetchone()[0]
 
         if count == 0:
             raise ValueError("기업정보가 존재하지 않습니다.")
@@ -68,16 +67,15 @@ def fde_pipeline():
     def check_data_quality():
 
         import sys
+
         import psycopg
 
         sys.path.insert(0, "/opt/airflow/src")
         from db_config import get_db_config
 
-        with psycopg.connect(**get_db_config()) as conn:
+        with psycopg.connect(**get_db_config()) as conn, conn.cursor() as cur:
 
-            with conn.cursor() as cur:
-
-                cur.execute("""
+            cur.execute("""
                     SELECT
                         COUNT(*) AS total_rows,
                         COUNT(DISTINCT corp_code)
@@ -93,12 +91,12 @@ def fde_pipeline():
                     FROM companies
                     """)
 
-                (
-                    total_rows,
-                    unique_companies,
-                    invalid_names,
-                    invalid_stock_codes,
-                ) = cur.fetchone()
+            (
+                total_rows,
+                unique_companies,
+                invalid_names,
+                invalid_stock_codes,
+            ) = cur.fetchone()
 
         print(f"전체 기업 수: {total_rows}")
         print(f"고유 기업 수: {unique_companies}")

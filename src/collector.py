@@ -1,11 +1,13 @@
-import os
 import csv
+import logging
+import os
+import time
+
 import requests
 from dotenv import load_dotenv
-from validator import validate_company
+
 from database import save_companies
-import logging
-import time
+from validator import validate_company
 
 logging.basicConfig(
     level=logging.INFO,

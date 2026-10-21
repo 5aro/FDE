@@ -6,8 +6,8 @@ import pytest
 
 from src.db_config import get_db_config
 from src.financial_collector import (
-    save_financial_statements,
     mark_collection_success,
+    save_financial_statements,
 )
 
 TEST_DB = "fde_test"
@@ -40,7 +40,7 @@ def test_financial_transaction_rollback():
             }
         ]
 
-        # 사전 조건: 테스트 기업과 RUNNING 상태를 준비한다.
+        # 사전 조건: 테스트 기업과 RUNNING 상태 준비
         with psycopg.connect(**db_config) as conn:
             assert conn.info.dbname == TEST_DB
 
@@ -67,26 +67,28 @@ def test_financial_transaction_rollback():
 
         try:
             # 실제 ETL 함수 통합 테스트
-            with pytest.raises(RuntimeError, match="의도적인 테스트 오류"):
-                with psycopg.connect(**db_config) as conn:
-                    assert conn.info.dbname == TEST_DB
+            with (
+                pytest.raises(RuntimeError, match="의도적인 테스트 오류"),
+                psycopg.connect(**db_config) as conn,
+            ):
+                assert conn.info.dbname == TEST_DB
 
-                    save_financial_statements(
-                        accounts,
-                        fs_div="CFS",
-                        conn=conn,
-                    )
+                save_financial_statements(
+                    accounts,
+                    fs_div="CFS",
+                    conn=conn,
+                )
 
-                    mark_collection_success(
-                        corp_code=TEST_CORP_CODE,
-                        bsns_year=TEST_YEAR,
-                        row_count=len(accounts),
-                        conn=conn,
-                        fs_div="CFS",
-                    )
+                mark_collection_success(
+                    corp_code=TEST_CORP_CODE,
+                    bsns_year=TEST_YEAR,
+                    row_count=len(accounts),
+                    conn=conn,
+                    fs_div="CFS",
+                )
 
-                    # COMMIT 이전에 의도적인 오류 발생
-                    raise RuntimeError("의도적인 테스트 오류")
+                # COMMIT 이전에 의도적인 오류 발생
+                raise RuntimeError("의도적인 테스트 오류")
 
             # ROLLBACK 검증
             with psycopg.connect(**db_config) as conn:
@@ -98,7 +100,7 @@ def test_financial_transaction_rollback():
                       AND bsns_year = %s
                       AND rcept_no = %s
                     """,
-                    (TEST_CORP_CODE, TEST_YEAR, "99999999999999"),
+                    (TEST_CORP_CODE, str(TEST_YEAR), "99999999999999"),
                 ).fetchone()[0]
 
                 status = conn.execute(
@@ -116,7 +118,7 @@ def test_financial_transaction_rollback():
                 assert status == "RUNNING"
 
         finally:
-            # 테스트 데이터 정리
+            # 테스트 성공/실패 여부와 관계없이 데이터 정리
             with psycopg.connect(**db_config) as conn:
                 conn.execute(
                     "DELETE FROM financial_statements WHERE corp_code = %s",

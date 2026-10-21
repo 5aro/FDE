@@ -59,21 +59,20 @@ def load_financial_data():
     # SQL 파일 읽기
     query = sql_path.read_text(encoding="utf-8")
 
+    connection_params = {
+        "dbname": os.getenv("DB_NAME", "fde"),
+        "user": os.getenv("DB_USER"),
+        "host": os.getenv("DB_HOST", "localhost"),
+        "port": os.getenv("DB_PORT", "5432"),
+        "password": os.getenv("DB_PASSWORD"),
+    }
+
     # PostgreSQL 연결
-    with psycopg.connect(
-        host=os.getenv("DB_HOST", "localhost"),
-        port=os.getenv("DB_PORT", "5432"),
-        dbname=os.getenv("DB_NAME", "fde"),
-        user=os.getenv("DB_USER", "postgres"),
-        password=os.getenv("DB_PASSWORD"),
-    ) as conn:
+    with psycopg.connect(**connection_params) as conn, conn.cursor() as cur:
+        cur.execute(query)
 
-        # SQL 실행 후 조회 결과를 DataFrame으로 변환
-        with conn.cursor() as cur:
-            cur.execute(query)
-
-            columns = [column.name for column in cur.description]
-            rows = cur.fetchall()
+        columns = [column.name for column in cur.description]
+        rows = cur.fetchall()
 
     return pd.DataFrame(rows, columns=columns)
 
@@ -81,7 +80,7 @@ def load_financial_data():
 try:
     df = load_financial_data()
 
-except Exception as e:
+except Exception as e:  # noqa: BLE001
     st.error(f"데이터 조회 실패: {e}")
     st.stop()
 

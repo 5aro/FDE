@@ -2,6 +2,7 @@ import os
 from unittest.mock import patch
 
 import psycopg
+
 from src.database import save_company_list
 
 TEST_DB = "fde_test"
@@ -27,16 +28,15 @@ def test_incremental_loading_postgresql():
         }
 
         # 실제 연결된 데이터베이스 확인
-        with psycopg.connect(**connection_params) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT current_database()")
-                assert cur.fetchone()[0] == TEST_DB
+        with psycopg.connect(**connection_params) as conn, conn.cursor() as cur:
+            cur.execute("SELECT current_database()")
+            assert cur.fetchone()[0] == TEST_DB
 
-                cur.execute(
-                    "SELECT COUNT(*) FROM companies WHERE corp_code = %s",
-                    (TEST_CORP_CODE,),
-                )
-                assert cur.fetchone()[0] == 0, "테스트 기업이 이미 존재합니다."
+            cur.execute(
+                "SELECT COUNT(*) FROM companies WHERE corp_code = %s",
+                (TEST_CORP_CODE,),
+            )
+            assert cur.fetchone()[0] == 0, "테스트 기업이 이미 존재합니다."
 
         try:
             # 1. 신규 INSERT
@@ -75,24 +75,22 @@ def test_incremental_loading_postgresql():
             }
 
             # 4. 실제 DB에 변경 내용이 반영됐는지 확인
-            with psycopg.connect(**connection_params) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
+            with psycopg.connect(**connection_params) as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
                         SELECT corp_name
                         FROM companies
                         WHERE corp_code = %s
                         """,
-                        (TEST_CORP_CODE,),
-                    )
+                    (TEST_CORP_CODE,),
+                )
 
-                    assert cur.fetchone()[0] == "FDE 변경기업"
+                assert cur.fetchone()[0] == "FDE 변경기업"
 
         finally:
             # 테스트 성공/실패 여부와 관계없이 데이터 삭제
-            with psycopg.connect(**connection_params) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "DELETE FROM companies WHERE corp_code = %s",
-                        (TEST_CORP_CODE,),
-                    )
+            with psycopg.connect(**connection_params) as conn, conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM companies WHERE corp_code = %s",
+                    (TEST_CORP_CODE,),
+                )

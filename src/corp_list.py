@@ -1,14 +1,16 @@
-import os
 import io
-import zipfile
 import logging
-import requests
+import os
 import xml.etree.ElementTree as ET
+import zipfile
+
+import requests
 from dotenv import load_dotenv
+
 from database import (
+    finish_pipeline_run,
     save_company_list,
     start_pipeline_run,
-    finish_pipeline_run,
 )
 
 load_dotenv()

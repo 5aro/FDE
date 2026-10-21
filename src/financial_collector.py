@@ -9,8 +9,8 @@ OpenDART 재무제표 수집기
 """
 
 import os
-from decimal import Decimal, InvalidOperation
 from contextlib import nullcontext
+from decimal import Decimal, InvalidOperation
 
 import psycopg
 import requests
@@ -216,19 +216,18 @@ def get_target_companies():
         "066570",  # LG전자
     ]
 
-    with psycopg.connect(**get_db_config()) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with psycopg.connect(**get_db_config()) as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT corp_code, corp_name
                 FROM companies
                 WHERE stock_code = ANY(%s)
                 ORDER BY corp_name
                 """,
-                (stock_codes,),
-            )
+            (stock_codes,),
+        )
 
-            companies = cur.fetchall()
+        companies = cur.fetchall()
 
     if len(companies) != 5:
         raise ValueError(f"수집 대상 기업 수가 올바르지 않습니다: {len(companies)}개")
@@ -312,7 +311,7 @@ def collect_target_companies_financials(
 
             print(f"[SUCCESS] {corp_name}: " f"{len(accounts)}건")
 
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             failures.append((corp_name, str(exc)))
 
             # 5. 실패 상태 기록
@@ -323,7 +322,7 @@ def collect_target_companies_financials(
                     error_message=str(exc),
                     fs_div="CFS",
                 )
-            except Exception as status_exc:
+            except Exception as status_exc:  # noqa: BLE001
                 print(
                     f"[WARNING] {corp_name}: " f"FAILED 상태 기록 실패 - {status_exc}"
                 )
@@ -355,10 +354,9 @@ def is_financial_data_collected(
         password=os.getenv("DB_PASSWORD"),
         host=os.getenv("DB_HOST", "localhost"),
         port=os.getenv("DB_PORT", "5432"),
-    ) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    ) as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT EXISTS (
                     SELECT 1
                     FROM financial_statements
@@ -367,10 +365,10 @@ def is_financial_data_collected(
                       AND fs_div = %s
                 )
                 """,
-                (corp_code, bsns_year, fs_div),
-            )
+            (corp_code, bsns_year, fs_div),
+        )
 
-            return cur.fetchone()[0]
+        return cur.fetchone()[0]
 
 
 def get_collection_status(
@@ -382,20 +380,19 @@ def get_collection_status(
 
     db_config = get_db_config()
 
-    with psycopg.connect(**db_config) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with psycopg.connect(**db_config) as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT status
                 FROM financial_collection_status
                 WHERE corp_code = %s
                   AND bsns_year = %s
                   AND fs_div = %s
                 """,
-                (corp_code, str(bsns_year), fs_div),
-            )
+            (corp_code, str(bsns_year), fs_div),
+        )
 
-            result = cur.fetchone()
+        result = cur.fetchone()
 
     return result[0] if result else None
 
@@ -409,10 +406,9 @@ def mark_collection_running(
 
     db_config = get_db_config()
 
-    with psycopg.connect(**db_config) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with psycopg.connect(**db_config) as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 INSERT INTO financial_collection_status (
                     corp_code,
                     bsns_year,
@@ -435,8 +431,8 @@ def mark_collection_running(
                     retry_count =
                         financial_collection_status.retry_count + 1
                 """,
-                (corp_code, str(bsns_year), fs_div),
-            )
+            (corp_code, str(bsns_year), fs_div),
+        )
 
 
 def mark_collection_failed(
@@ -449,10 +445,9 @@ def mark_collection_failed(
 
     db_config = get_db_config()
 
-    with psycopg.connect(**db_config) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with psycopg.connect(**db_config) as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 UPDATE financial_collection_status
                 SET
                     status = 'FAILED',
@@ -463,16 +458,16 @@ def mark_collection_failed(
                   AND fs_div = %s
                   AND status = 'RUNNING'
                 """,
-                (
-                    error_message,
-                    corp_code,
-                    str(bsns_year),
-                    fs_div,
-                ),
-            )
+            (
+                error_message,
+                corp_code,
+                str(bsns_year),
+                fs_div,
+            ),
+        )
 
-            if cur.rowcount != 1:
-                raise RuntimeError("RUNNING 상태의 수집 작업을 찾을 수 없습니다.")
+        if cur.rowcount != 1:
+            raise RuntimeError("RUNNING 상태의 수집 작업을 찾을 수 없습니다.")
 
 
 def mark_collection_success(

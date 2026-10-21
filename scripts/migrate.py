@@ -40,9 +40,8 @@ def run_migrations():
         raise ValueError(f"허용되지 않은 데이터베이스: {db_name}")
 
     # 실제 DB 실행 시 명시적인 승인 필요
-    if db_name == "fde":
-        if os.getenv("ALLOW_PRODUCTION_MIGRATION") != "true":
-            raise RuntimeError("fde 마이그레이션은 명시적인 승인이 필요합니다.")
+    if db_name == "fde" and os.getenv("ALLOW_PRODUCTION_MIGRATION") != "true":
+        raise RuntimeError("fde 마이그레이션은 명시적인 승인이 필요합니다.")
 
     migration_files = sorted(MIGRATIONS_DIR.glob("[0-9]*_*.sql"))
 
@@ -87,9 +86,8 @@ def run_migrations():
         # 이력 테이블 생성
         bootstrap_sql = BOOTSTRAP_FILE.read_text(encoding="utf-8")
 
-        with conn.transaction():
-            with conn.cursor() as cur:
-                cur.execute(bootstrap_sql)
+        with conn.transaction(), conn.cursor() as cur:
+            cur.execute(bootstrap_sql)
 
         # 적용된 버전 조회
         with conn.cursor() as cur:
@@ -118,21 +116,20 @@ def run_migrations():
             sql = file.read_text(encoding="utf-8")
 
             # SQL 실행 + 이력 저장을 하나의 트랜잭션으로 처리
-            with conn.transaction():
-                with conn.cursor() as cur:
+            with conn.transaction(), conn.cursor() as cur:
 
-                    cur.execute(sql)
+                cur.execute(sql)
 
-                    cur.execute(
-                        """
+                cur.execute(
+                    """
                         INSERT INTO public.schema_migrations (
                             version,
                             description
                         )
                         VALUES (%s, %s)
                         """,
-                        (version, description),
-                    )
+                    (version, description),
+                )
 
             applied_versions.add(version)
 
